@@ -5,3 +5,5 @@ const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 
 // Create a single, shared Supabase client for the entire app
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+
