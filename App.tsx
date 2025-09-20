@@ -90,17 +90,25 @@ const App: React.FC = () => {
     setStep('translating');
     setError(null);
     setProgress(0);
-    setProgressTask('');
+    setProgressTask('Translating content...');
 
     try {
-      // Step 1: Translate
-      setProgress(50);
-      setProgressTask('Translating content...');
       const glossaryString = glossary.map(term => `${term.source}: ${term.target}`).join('\n');
-      const translated = await translate(extractedData, sourceLanguage, targetLanguage, formality, glossaryString);
+      
+      const updateProgress = (p: number) => {
+        setProgress(p);
+      };
+
+      const translated = await translate(
+          extractedData, 
+          sourceLanguage, 
+          targetLanguage, 
+          formality, 
+          glossaryString,
+          updateProgress
+      );
       setTranslatedData(translated);
 
-      // Step 2: Finalize
       setProgress(100);
       setProgressTask('Complete!');
       
