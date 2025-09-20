@@ -42,3 +42,10 @@ export interface GlossaryTerm {
   source: string;
   target: string;
 }
+
+export interface FailedTranslation {
+  pageNumber: number;
+  error: string;
+}
+
+export type TranslationResult = TranslatedData | FailedTranslation;

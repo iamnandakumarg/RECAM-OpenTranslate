@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { SpinnerIcon } from './icons';
 
 interface ProcessingViewProps {
   fileName: string;
@@ -32,8 +31,41 @@ export const ProcessingView: React.FC<ProcessingViewProps> = ({ fileName }) => {
 
   return (
     <div className="text-center p-8">
-      <SpinnerIcon className="mx-auto h-12 w-12 text-teal-600" />
-      <h2 className="mt-4 text-xl font-semibold">Processing "{fileName}"</h2>
+      <div className="mb-4">
+        <p className="text-lg tracking-wider" style={{ color: '#2dd4bf' }}>loading...</p>
+      </div>
+
+      <div 
+        className="w-full h-5 rounded-full p-0.5"
+        style={{ border: '1px solid #2dd4bf' }}
+        role="progressbar"
+        aria-busy="true"
+        aria-label="Processing document"
+      >
+        <div 
+          className="h-full w-full rounded-full overflow-hidden"
+        >
+            <div 
+                className="h-full w-full"
+                style={{
+                    animation: 'loading-pan 2s linear infinite',
+                    background: `linear-gradient(
+                        to right,
+                        #0f766e, #14b8a6, #5eead4, #14b8a6, #0f766e
+                    )`, // Using shades of teal for the gradient
+                    backgroundSize: '200% 100%',
+                }}
+            ></div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes loading-pan {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+      
+      <h2 className="mt-6 text-xl font-semibold">Processing "{fileName}"</h2>
       <div className="mt-2 text-gray-600 h-6 flex items-center justify-center">
         <p className={`transition-opacity duration-500 ${isFading ? 'opacity-0' : 'opacity-100'}`}>
           {processingMessages[currentMessageIndex]}

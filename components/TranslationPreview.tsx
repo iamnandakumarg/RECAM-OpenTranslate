@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import type { ExtractedData, TranslatedData, DocumentBlock, TableBlock, TextBlock, TableCell } from '../types';
-import { InfoIcon, EditIcon } from './icons';
+import type { ExtractedData, TranslatedData, DocumentBlock, TableBlock, TextBlock, TableCell, TranslationResult, FailedTranslation } from '../types';
+import { InfoIcon, EditIcon, RefreshCwIcon } from './icons';
 import { CopyButton } from './CopyButton';
 
 const CONFIDENCE_THRESHOLD = 0.9;
@@ -15,9 +15,18 @@ const getConfidenceAttributes = (confidence?: number): { className: string; titl
     return { className: '' };
 }
 
-const extractTextFromPages = (pages: ExtractedData[]): string => {
+const isFailedTranslation = (result: any): result is FailedTranslation => {
+    return result && typeof result.error === 'string';
+};
+
+const extractTextFromPages = (pages: (ExtractedData | TranslationResult)[]): string => {
     return pages.map(page => {
-        return page.blocks.map(block => {
+        if (isFailedTranslation(page)) {
+            return `\n\n-- Page ${page.pageNumber} Failed to Translate --\n\n`;
+        }
+        
+        const pageData = page as ExtractedData;
+        return pageData.blocks.map(block => {
             if (block.type === 'table') {
                 return block.rows.map(row => 
                     row.map(cell => cell.text).join('\t')
@@ -30,13 +39,14 @@ const extractTextFromPages = (pages: ExtractedData[]): string => {
 
 
 interface DocumentColumnProps {
-  pages: ExtractedData[];
+  pages: (ExtractedData | TranslationResult)[];
   title: string;
   isEditable?: boolean;
   onDataChange?: React.Dispatch<React.SetStateAction<ExtractedData[] | null>>;
+  onRetryPage?: (pageNumber: number) => void;
 }
 
-const DocumentColumn: React.FC<DocumentColumnProps> = ({ pages, title, isEditable = false, onDataChange }) => {
+const DocumentColumn: React.FC<DocumentColumnProps> = ({ pages, title, isEditable = false, onDataChange, onRetryPage }) => {
   const [isEditing, setIsEditing] = useState(false);
   const fullText = extractTextFromPages(pages);
 
@@ -145,9 +155,26 @@ const DocumentColumn: React.FC<DocumentColumnProps> = ({ pages, title, isEditabl
       </div>
       {pages.map(page => (
         <div key={`page-${page.pageNumber}`} className="mb-6">
-          <div className={`p-4 bg-gray-50/50 border-2 border-dashed rounded-lg ${isEditing ? 'border-blue-400' : 'border-gray-200'}`}>
-             {page.blocks.map(block => renderBlock(block, page.pageNumber))}
-          </div>
+            {isFailedTranslation(page) ? (
+                <div className="p-4 bg-red-50 border-2 border-dashed border-red-300 rounded-lg text-center">
+                    <h4 className="font-semibold text-red-800">Translation Failed for Page {page.pageNumber}</h4>
+                    <p className="text-xs text-red-700 mt-1 mb-3 break-words">{page.error}</p>
+                    {onRetryPage && (
+                        <button
+                            onClick={() => onRetryPage(page.pageNumber)}
+                            disabled={page.error === 'Retrying translation...'}
+                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
+                        >
+                            <RefreshCwIcon className={`w-3 h-3 mr-1.5 ${page.error === 'Retrying translation...' ? 'animate-spin' : ''}`} />
+                            {page.error === 'Retrying translation...' ? 'Retrying...' : 'Retry'}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className={`p-4 bg-gray-50/50 border-2 border-dashed rounded-lg ${isEditing ? 'border-blue-400' : 'border-gray-200'}`}>
+                    {(page as ExtractedData).blocks.map(block => renderBlock(block, page.pageNumber))}
+                </div>
+            )}
           <p className="text-xs text-center text-gray-400 mt-2">Page {page.pageNumber}</p>
         </div>
       ))}
@@ -158,12 +185,13 @@ const DocumentColumn: React.FC<DocumentColumnProps> = ({ pages, title, isEditabl
 
 interface TranslationPreviewProps {
   original: ExtractedData[];
-  translated?: TranslatedData[];
+  translated?: TranslationResult[];
   onOriginalChange: React.Dispatch<React.SetStateAction<ExtractedData[] | null>>;
   onTranslate?: () => void;
+  onRetryPage?: (pageNumber: number) => void;
 }
 
-export const TranslationPreview: React.FC<TranslationPreviewProps> = ({ original, translated, onOriginalChange, onTranslate }) => {
+export const TranslationPreview: React.FC<TranslationPreviewProps> = ({ original, translated, onOriginalChange, onTranslate, onRetryPage }) => {
 
   if (!translated) {
     return (
@@ -197,7 +225,7 @@ export const TranslationPreview: React.FC<TranslationPreviewProps> = ({ original
       </div>
       <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
         <DocumentColumn pages={original} title="Original Document" isEditable={true} onDataChange={onOriginalChange} />
-        <DocumentColumn pages={translated} title="Translated Document" />
+        <DocumentColumn pages={translated} title="Translated Document" onRetryPage={onRetryPage} />
       </div>
     </div>
   );

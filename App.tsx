@@ -6,10 +6,10 @@ import { ProcessingView } from './components/ProcessingView';
 import { TranslationPreview } from './components/TranslationPreview';
 import { DownloadOptions } from './components/DownloadOptions';
 import { ProgressBar } from './components/ProgressBar';
-import { uploadFile, extractContent, translate, deleteDocument } from './services/apiService';
+import { uploadFile, translatePage, deleteDocument } from './services/apiService';
 import { generatePdf, generateDocx } from './services/documentGenerator';
 import useLocalStorage from './hooks/useLocalStorage';
-import type { ExtractedData, TranslatedData, GlossaryTerm } from './types';
+import type { ExtractedData, TranslatedData, GlossaryTerm, TranslationResult } from './types';
 
 type AppStep = 'upload' | 'extracting' | 'edit' | 'translating' | 'result' | 'download';
 export type Formality = 'default' | 'formal' | 'informal';
@@ -19,7 +19,7 @@ const App: React.FC = () => {
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedData[] | null>(null);
-  const [translatedData, setTranslatedData] = useState<TranslatedData[] | null>(null);
+  const [translatedData, setTranslatedData] = useState<TranslationResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sourceLanguage, setSourceLanguage] = useState('auto');
   const [targetLanguage, setTargetLanguage] = useState('en');
@@ -51,6 +51,7 @@ const App: React.FC = () => {
       // Step 1: Upload
       setProgress(20);
       setProgressTask('Uploading document...');
+      const { extractContent } = await import('./services/apiService');
       const filePath = await uploadFile(originalFile);
       setUploadedFilePath(filePath);
       tempUploadedFilePath = filePath;
@@ -92,39 +93,80 @@ const App: React.FC = () => {
     setProgress(0);
     setProgressTask('Translating content...');
 
-    try {
-      const glossaryString = glossary.map(term => `${term.source}: ${term.target}`).join('\n');
-      
-      const updateProgress = (p: number) => {
-        setProgress(p);
-      };
+    const glossaryString = glossary.map(term => `${term.source}: ${term.target}`).join('\n');
+    const allResults: TranslationResult[] = [];
+    const totalPages = extractedData.length;
 
-      const translated = await translate(
-          extractedData, 
-          sourceLanguage, 
-          targetLanguage, 
-          formality, 
-          glossaryString,
-          updateProgress
-      );
-      setTranslatedData(translated);
+    for (let i = 0; i < totalPages; i++) {
+        const page = extractedData[i];
+        try {
+            const translated = await translatePage(
+                page,
+                sourceLanguage,
+                targetLanguage,
+                formality,
+                glossaryString
+            );
+            allResults.push(translated);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during translation.';
+            allResults.push({ pageNumber: page.pageNumber, error: errorMessage });
+        }
+        setProgress(((i + 1) / totalPages) * 100);
+    }
+    
+    setTranslatedData(allResults);
 
-      setProgress(100);
-      setProgressTask('Complete!');
-      
-      setTimeout(() => {
+    setProgress(100);
+    setProgressTask('Complete!');
+    
+    setTimeout(() => {
         setStep('result');
-      }, 500);
+    }, 500);
+
+}, [extractedData, sourceLanguage, targetLanguage, formality, glossary]);
+
+const handleRetryTranslatePage = useCallback(async (pageNumber: number) => {
+    if (!extractedData || !translatedData) return;
+
+    const originalPage = extractedData.find(p => p.pageNumber === pageNumber);
+    if (!originalPage) {
+        console.error(`Could not find original data for page ${pageNumber} to retry.`);
+        return;
+    }
+
+    setTranslatedData(currentData => {
+        if (!currentData) return null;
+        return currentData.map(p => 
+            p.pageNumber === pageNumber ? { ...p, error: 'Retrying translation...' } : p
+        );
+    });
+
+    try {
+        const glossaryString = glossary.map(term => `${term.source}: ${term.target}`).join('\n');
+        const translated = await translatePage(
+            originalPage,
+            sourceLanguage,
+            targetLanguage,
+            formality,
+            glossaryString
+        );
+        
+        setTranslatedData(currentData => {
+            if (!currentData) return null;
+            return currentData.map(p => p.pageNumber === pageNumber ? translated : p);
+        });
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      setError(`Translation failed: ${errorMessage}. Please try again.`);
-      setStep('edit'); // Go back to edit step on failure
-      setProgress(0);
-      setProgressTask('');
-      console.error(err);
+        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during retry.';
+        setTranslatedData(currentData => {
+            if (!currentData) return null;
+            return currentData.map(p => 
+                p.pageNumber === pageNumber ? { pageNumber: pageNumber, error: errorMessage } : p
+            );
+        });
     }
-  }, [extractedData, sourceLanguage, targetLanguage, formality, glossary]);
+}, [extractedData, translatedData, sourceLanguage, targetLanguage, formality, glossary]);
 
 
   const handleReset = async () => {
@@ -153,8 +195,15 @@ const App: React.FC = () => {
   const handleDownloadPdf = useCallback(async () => {
     if (!translatedData || !originalFile) return;
     try {
+        const successfulTranslations = translatedData.filter(
+            (p): p is TranslatedData => 'blocks' in p
+        );
+        if (successfulTranslations.length === 0) {
+            setError("No pages were translated successfully. Cannot generate PDF.");
+            return;
+        }
         const fileName = originalFile.name.replace(/\.[^/.]+$/, "") + '.pdf';
-        await generatePdf(translatedData, fileName);
+        await generatePdf(successfulTranslations, fileName);
         setStep('download');
     } catch (err) {
         console.error("Failed to generate PDF:", err);
@@ -165,8 +214,15 @@ const App: React.FC = () => {
   const handleDownloadDocx = useCallback(async () => {
       if (!translatedData || !originalFile) return;
       try {
+          const successfulTranslations = translatedData.filter(
+              (p): p is TranslatedData => 'blocks' in p
+          );
+          if (successfulTranslations.length === 0) {
+              setError("No pages were translated successfully. Cannot generate DOCX.");
+              return;
+          }
           const fileName = originalFile.name.replace(/\.[^/.]+$/, "") + '.docx';
-          await generateDocx(translatedData, fileName);
+          await generateDocx(successfulTranslations, fileName);
           setStep('download');
       } catch (err) {
           console.error("Failed to generate DOCX:", err);
@@ -219,7 +275,12 @@ const App: React.FC = () => {
         if (extractedData && translatedData) {
           return (
             <div>
-              <TranslationPreview original={extractedData} translated={translatedData} onOriginalChange={setExtractedData} />
+              <TranslationPreview 
+                original={extractedData} 
+                translated={translatedData} 
+                onOriginalChange={setExtractedData} 
+                onRetryPage={handleRetryTranslatePage}
+              />
               <DownloadOptions 
                 onDownloadPdf={handleDownloadPdf}
                 onDownloadDocx={handleDownloadDocx} 

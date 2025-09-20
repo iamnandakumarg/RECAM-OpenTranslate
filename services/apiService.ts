@@ -83,53 +83,42 @@ export const extractContent = async (file: File): Promise<ExtractedData[]> => {
 
 
 /**
- * Translates structured document data page by page using a Netlify function.
+ * Translates a single page of structured document data using a Netlify function.
  */
-export const translate = async (
-    data: ExtractedData[], 
+export const translatePage = async (
+    pageToTranslate: ExtractedData, 
     sourceLang: string, 
     targetLang: string,
     formality: Formality,
-    glossary: string,
-    onProgress: (progress: number) => void
-): Promise<TranslatedData[]> => {
-  console.log(`Calling Netlify function for translation from ${sourceLang} to ${targetLang}...`);
-  
-    const allTranslatedPages: TranslatedData[] = [];
-    const totalPages = data.length;
+    glossary: string
+): Promise<TranslatedData> => {
+    console.log(`Translating page ${pageToTranslate.pageNumber} from ${sourceLang} to ${targetLang}...`);
+    try {
+        const response = await fetch('/.netlify/functions/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pageToTranslate,
+            sourceLang,
+            targetLang,
+            formality,
+            glossary
+          })
+        });
 
-    for (let i = 0; i < totalPages; i++) {
-        const pageToTranslate = data[i];
-        
-        try {
-            const response = await fetch('/.netlify/functions/translate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                pageToTranslate,
-                sourceLang,
-                targetLang,
-                formality,
-                glossary
-              })
-            });
-
-            if (!response.ok) {
-              const errorBody = await response.json();
-              throw new Error(errorBody.error || `Request failed with status ${response.status}`);
-            }
-
-            const translatedPage = await response.json();
-            allTranslatedPages.push(translatedPage);
-
-        } catch (error) {
-            console.error(`Error translating page ${pageToTranslate.pageNumber}:`, error);
-            const message = error instanceof Error ? error.message : "An unknown error occurred";
-            throw new Error(`Failed to translate page ${pageToTranslate.pageNumber}: ${message}`);
+        if (!response.ok) {
+          const errorBody = await response.json();
+          const errorMessage = errorBody.error || `Request failed with status ${response.status}`;
+          throw new Error(errorMessage);
         }
-        
-        onProgress(((i + 1) / totalPages) * 100);
-    }
 
-    return allTranslatedPages;
+        const translatedPage = await response.json();
+        return translatedPage;
+
+    } catch (error) {
+        console.error(`Error translating page ${pageToTranslate.pageNumber}:`, error);
+        const message = error instanceof Error ? error.message : "An unknown error occurred";
+        // Re-throw the error so it can be caught in the calling function (App.tsx)
+        throw new Error(`Failed to translate page ${pageToTranslate.pageNumber}: ${message}`);
+    }
 };
