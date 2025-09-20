@@ -113,8 +113,8 @@ const handlePdfOrImage = async (options: ProcessOptions): Promise<ProcessResult>
 
             if (!context) throw new Error(`Could not get canvas context for page ${i}`);
             
-            // FIX: The RenderParameters type from the version of pdfjs-dist being used appears to require the 'canvas' property.
-            await page.render({ canvasContext: context, viewport: viewport, canvas: canvas }).promise;
+            // FIX: The compiler requires the `canvas` property in the RenderParameters object to fix a type error.
+            await page.render({ canvasContext: context, viewport, canvas }).promise;
 
             onProgress(`Translating page ${i} of ${numPages}...`, pageProgressStart + 25);
             

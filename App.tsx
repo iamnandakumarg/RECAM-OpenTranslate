@@ -159,6 +159,25 @@ const App: React.FC = () => {
         setProgressPercentage(null);
     };
 
+    const handleDeleteHistoryItem = async (id: number) => {
+        const originalHistory = [...history];
+        // Optimistically update the UI
+        setHistory(history.filter(item => item.id !== id));
+
+        const { error } = await supabase
+            .from('translation_history')
+            .delete()
+            .match({ id });
+
+        if (error) {
+            console.error('Error deleting history item:', error.message);
+            setError('Could not delete item from history. Please try again.');
+            // Revert UI if the deletion fails
+            setHistory(originalHistory);
+        }
+    };
+
+
     const renderContent = () => {
         if (!librariesReady) {
             return (
@@ -288,7 +307,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     <div className="lg:col-span-1">
-                       <HistoryPanel history={history} />
+                       <HistoryPanel history={history} onDeleteItem={handleDeleteHistoryItem} />
                     </div>
                 </div>
             </main>
