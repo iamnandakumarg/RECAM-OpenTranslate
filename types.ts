@@ -1,28 +1,44 @@
-export interface Language {
-  code: string;
-  name: string;
+export interface BoundingBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
-export interface ProcessStep {
-  name: string;
+export interface TextBlock {
+  id: string;
+  type: 'heading' | 'paragraph' | 'list_item';
+  level?: number; // For H1, H2, etc.
+  text: string;
+  bbox: BoundingBox;
+  confidence?: number; // OCR confidence score (0 to 1)
 }
 
-export type Status = 'idle' | 'processing' | 'processed' | 'error';
-
-export interface HistoryItem {
-  id: number;
-  file_name: string;
-  source_language: string;
-  target_language: string;
-  created_at: string;
-  translated_text: string;
+export interface TableCell {
+  id: string;
+  text: string;
+  row: number;
+  col: number;
+  confidence?: number; // OCR confidence score (0 to 1)
 }
 
-export interface TranslatedLine {
-    text: string;
-    isHeading: boolean;
+export interface TableBlock {
+  id:string;
+  type: 'table';
+  rows: TableCell[][];
+  bbox: BoundingBox;
 }
 
-export interface TranslatedImageResponse {
-    lines: TranslatedLine[];
+export type DocumentBlock = TextBlock | TableBlock;
+
+export interface ExtractedData {
+  pageNumber: number;
+  blocks: DocumentBlock[];
+}
+
+export interface TranslatedData extends ExtractedData {}
+
+export interface GlossaryTerm {
+  source: string;
+  target: string;
 }

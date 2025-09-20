@@ -1,5 +1,5 @@
 {
-  "name": "RECAM OpenTranslate",
-  "description": "An open-source document translator that supports PDF, Word, and image files. It uses client-side OCR and AI to provide free, unlimited translations while preserving document structure.",
+  "name": "RECAM LeaseTransPro",
+  "description": "A simple and reliable document translator for PDF, Word, and text files.",
   "requestFramePermissions": []
 }
