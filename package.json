@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "react-pdf": "9.1.1",
-    "pdfjs-dist": "4.8.69",
+    "pdfjs-dist": "4.4.168",
     "docx": "8.5.0",
     "react-dom": "^19.1.1",
     "react": "^19.1.1",
